@@ -54,7 +54,7 @@ export const createNotificationSender = (dependencies: NotificationDependencies)
 			// sanitizer already removed the control characters it would escape.
 			run("osascript", [
 				"-e",
-				`display notification ${JSON.stringify(message)} with title ${JSON.stringify(title)}`,
+				`display notification ${JSON.stringify(message)} with title ${JSON.stringify(title)} sound name "default"`,
 			]);
 		};
 	}
@@ -63,7 +63,7 @@ export const createNotificationSender = (dependencies: NotificationDependencies)
 		const title = sanitizeNotificationField(rawTitle);
 		const message = sanitizeNotificationField(rawMessage);
 		try {
-			notifier.notify({ title, message }, (error) => {
+			notifier.notify({ title, message, sound: true }, (error) => {
 				if (error) logFailure(error);
 			});
 		} catch (error) {
