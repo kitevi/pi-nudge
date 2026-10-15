@@ -1,0 +1,43 @@
+{
+	"name": "pi-nudge",
+	"version": "0.1.0",
+	"description": "Native desktop notifications for the pi coding agent: nudges you when the agent settles and your terminal is unfocused.",
+	"type": "module",
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"desktop-notifications"
+	],
+	"license": "MIT",
+	"author": "kitevi",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/kitevi/pi-nudge.git"
+	},
+	"files": [
+		"src",
+		"README.md"
+	],
+	"scripts": {
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit"
+	},
+	"pi": {
+		"extensions": [
+			"./src/extension.ts"
+		]
+	},
+	"dependencies": {
+		"node-notifier": "latest"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "latest",
+		"@types/node": "latest",
+		"jiti": "latest",
+		"typescript": "latest",
+		"vitest": "latest"
+	}
+}
