@@ -36,6 +36,7 @@
 	"devDependencies": {
 		"@earendil-works/pi-coding-agent": "latest",
 		"@types/node": "latest",
+		"@types/node-notifier": "^8.0.5",
 		"jiti": "latest",
 		"typescript": "latest",
 		"vitest": "latest"

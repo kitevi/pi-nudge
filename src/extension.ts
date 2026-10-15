@@ -2,9 +2,9 @@
  * pi-nudge — native desktop notifications for the pi coding agent.
  *
  * Nudges you when the agent settles while your terminal is unfocused, so you
- * know pi is waiting for input without watching the terminal. Delivery is
- * delegated to node-notifier (see notify.ts); this file wires pi's session
- * events to focus tracking and the settle debounce.
+ * know pi is waiting for input without watching the terminal. Delivery lives
+ * in notify.ts (osascript on macOS, node-notifier elsewhere); this file wires
+ * pi's session events to focus tracking and the settle debounce.
  *
  * The agent_settled "waiting" notification is debounced: when a new agent
  * run starts within the delay (auto-retry, compaction retry, queued
@@ -20,7 +20,7 @@ import {
 	type FocusDependencies,
 	type FocusState,
 } from "./focus.ts";
-import { createNodeNotifierSender, type SendNotification } from "./notify.ts";
+import { createNotificationSender, type SendNotification } from "./notify.ts";
 
 const DEFAULT_SETTLE_NOTIFY_DELAY_MS = 10_000;
 
@@ -46,7 +46,8 @@ const runtimeDependencies: PiNudgeDependencies = {
 };
 
 export const createPiNudgeExtension = (dependencies: PiNudgeDependencies) => {
-	const notify = dependencies.sendNotification ?? createNodeNotifierSender();
+	const notify =
+		dependencies.sendNotification ?? createNotificationSender({ platform: dependencies.platform });
 	const settleDelayMs = dependencies.settleNotifyDelayMs ?? DEFAULT_SETTLE_NOTIFY_DELAY_MS;
 	const setTimer = dependencies.setTimer ?? ((fn: () => void, delayMs: number) => setTimeout(fn, delayMs));
 	const clearTimer =

@@ -11,16 +11,18 @@ input without watching the terminal.
 - When the agent settles (`agent_settled`) and pi stays idle for 10 seconds while unfocused,
   sends one notification. A run resuming within the delay (auto-retry, compaction retry, queued
   follow-up) cancels the pending nudge.
-- Delivery is delegated to [node-notifier](https://github.com/mikaelbr/node-notifier):
-  Notification Center on macOS, toasts on Windows, `notify-send` on Linux, Growl as a fallback.
-  No terminal-emulator dependency — no OSC escape sequences.
+- Delivery: `osascript` on macOS — node-notifier's bundled terminal-notifier is
+  Intel-only and needs Rosetta, which macOS 28 removes — and
+  [node-notifier](https://github.com/mikaelbr/node-notifier) elsewhere: toasts on Windows,
+  `notify-send` on Linux, Growl as a fallback. No terminal-emulator dependency — no OSC escape
+  sequences.
 
 ## Install
 
     pi install git:github.com/kitevi/pi-nudge
 
 On macOS the first notification triggers the notification permission prompt, and notifications are
-labeled with node-notifier's bundled terminal-notifier app.
+labeled with the system osascript sender (Script Editor).
 
 ## Develop
 

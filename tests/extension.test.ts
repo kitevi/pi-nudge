@@ -5,7 +5,7 @@ import type {
 	TerminalInputHandler,
 } from "@earendil-works/pi-coding-agent";
 import { createPiNudgeExtension, type PiNudgeDependencies } from "../src/extension.ts";
-import { sanitizeNotificationField } from "../src/notify.ts";
+import { createNotificationSender, sanitizeNotificationField } from "../src/notify.ts";
 
 type ExtensionHandler = (event: unknown, ctx: ExtensionContext) => unknown;
 type ScheduledTimer = { fn: () => void; delayMs: number; cancelled: boolean };
@@ -208,6 +208,25 @@ void describe("pi-nudge", () => {
 
 		assert.deepStrictEqual(harness.writes, ["\x1b[?1004l"]);
 		assert.throws(() => harness.input("\x1b[O"), /session_start must install/);
+	});
+
+	it("delivers macOS notifications through the native osascript binary", () => {
+		// node-notifier's vendored terminal-notifier.app is Intel-only; on macOS
+		// delivery must go through osascript (native on every install) instead.
+		const runs: Array<{ command: string; args: string[] }> = [];
+		const send = createNotificationSender({
+			platform: "darwin",
+			runCommand: (command, args) => runs.push({ command, args }),
+		});
+
+		send('Pi "is" waiting\nfor you', "ready; for input");
+
+		assert.strictEqual(runs.length, 1);
+		assert.strictEqual(runs[0]?.command, "osascript");
+		assert.strictEqual(
+			runs[0]?.args[1],
+			'display notification "ready for input" with title "Pi \\"is\\" waiting for you"',
+		);
 	});
 
 	it("sanitizes control characters before notification delivery", () => {
