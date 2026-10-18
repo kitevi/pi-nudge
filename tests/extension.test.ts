@@ -4,7 +4,12 @@ import type {
 	ExtensionContext,
 	TerminalInputHandler,
 } from "@earendil-works/pi-coding-agent";
-import { createPiNudgeExtension, readProbeCommand, type PiNudgeDependencies } from "../src/extension.ts";
+import {
+	createPiNudgeExtension,
+	inputLabel,
+	readProbeCommand,
+	type PiNudgeDependencies,
+} from "../src/extension.ts";
 import { createNotificationSender, sanitizeNotificationField } from "../src/notify.ts";
 
 const { notifyMock } = vi.hoisted(() => ({ notifyMock: vi.fn() }));
@@ -33,6 +38,7 @@ const createHarness = (overrides: Partial<PiNudgeDependencies> = {}) => {
 	let stdinHandler: ((chunk: string) => void) | undefined;
 	let stdinSubscriptions = 0;
 	const scheduled: ScheduledTimer[] = [];
+	const statuses = new Map<string, string | undefined>();
 	const { subscribeStdin: subscribeOverride, ...restOverrides } = overrides;
 
 	const pi = {
@@ -50,6 +56,9 @@ const createHarness = (overrides: Partial<PiNudgeDependencies> = {}) => {
 				return () => {
 					terminalInput = undefined;
 				};
+			},
+			setStatus(key: string, text: string | undefined) {
+				statuses.set(key, text);
 			},
 		},
 		isIdle: () => true,
@@ -86,6 +95,7 @@ const createHarness = (overrides: Partial<PiNudgeDependencies> = {}) => {
 		ctx,
 		writes,
 		notifications,
+		status: () => statuses.get("pi-nudge"),
 		stdinSubscriptions: () => stdinSubscriptions,
 		pendingNudges: () => scheduled.filter((timer) => !timer.cancelled).length,
 		flushTimers: async () => {
@@ -99,6 +109,11 @@ const createHarness = (overrides: Partial<PiNudgeDependencies> = {}) => {
 		input: (data: string) => {
 			assert.ok(terminalInput, "session_start must install a terminal input listener");
 			return terminalInput(data);
+		},
+		submitInput: (text: string, source = "interactive") => {
+			const handler = lifecycle.get("input");
+			assert.ok(handler, "pi-nudge must register an input handler");
+			return handler({ type: "input", text, source }, ctx);
 		},
 		stdin: (data: string) => {
 			assert.ok(stdinHandler, "session_start must subscribe to stdin");
@@ -125,6 +140,131 @@ void describe("pi-nudge", () => {
 		await harness.flushTimers();
 
 		assert.deepStrictEqual(harness.notifications, [waiting()]);
+	});
+
+	it("labels the notification and footer with the latest request", async () => {
+		const harness = createHarness();
+
+		harness.run("session_start");
+		harness.submitInput("fix the flaky focus test");
+		harness.input("\x1b[O");
+		harness.run("agent_settled");
+		await harness.flushTimers();
+
+		assert.deepStrictEqual(harness.notifications, [
+			{
+				title: "Pi is waiting for you",
+				message: "fix the flaky focus test · pi-nudge is ready for input.",
+			},
+		]);
+		assert.strictEqual(harness.status(), "fix the flaky focus test");
+
+		harness.run("agent_start");
+		assert.strictEqual(harness.status(), undefined);
+	});
+
+	it("labels slash-command prompts by their arguments", async () => {
+		const harness = createHarness();
+
+		harness.run("session_start");
+		harness.submitInput("/context-revalidation check auth");
+		harness.input("\x1b[O");
+		harness.run("agent_settled");
+		await harness.flushTimers();
+
+		assert.deepStrictEqual(harness.notifications, [
+			{
+				title: "Pi is waiting for you",
+				message: "check auth · pi-nudge is ready for input.",
+			},
+		]);
+	});
+
+	it("keeps the last meaningful label for generic follow-ups", async () => {
+		const harness = createHarness();
+
+		harness.run("session_start");
+		harness.submitInput("fix the notification label");
+		harness.submitInput("continue");
+		harness.input("\x1b[O");
+		harness.run("agent_settled");
+		await harness.flushTimers();
+
+		assert.deepStrictEqual(harness.notifications, [
+			{
+				title: "Pi is waiting for you",
+				message: "fix the notification label · pi-nudge is ready for input.",
+			},
+		]);
+	});
+
+	it("clears the footer label when the tab regains focus", async () => {
+		const harness = createHarness();
+
+		harness.run("session_start");
+		harness.submitInput("fix the flaky focus test");
+		harness.input("\x1b[O");
+		harness.run("agent_settled");
+		await harness.flushTimers();
+		assert.strictEqual(harness.status(), "fix the flaky focus test");
+
+		harness.input("\x1b[I");
+		assert.strictEqual(harness.status(), undefined);
+	});
+
+	it("omits labels when PI_NUDGE_LABEL is off", async () => {
+		const harness = createHarness({
+			env: { TERM: "xterm-256color", PI_NUDGE_LABEL: "off" },
+		});
+
+		harness.run("session_start");
+		harness.submitInput("fix the flaky focus test");
+		harness.input("\x1b[O");
+		harness.run("agent_settled");
+		await harness.flushTimers();
+
+		assert.deepStrictEqual(harness.notifications, [waiting()]);
+		assert.strictEqual(harness.status(), undefined);
+	});
+
+	it("ignores labels from extension-sourced input", async () => {
+		const harness = createHarness();
+
+		harness.run("session_start");
+		harness.submitInput("generated message", "extension");
+		harness.input("\x1b[O");
+		harness.run("agent_settled");
+		await harness.flushTimers();
+
+		assert.deepStrictEqual(harness.notifications, [waiting()]);
+	});
+
+	it("derives a bounded grapheme label from input", () => {
+		assert.strictEqual(inputLabel("  # Fix the flaky focus test  "), "Fix the flaky focus test");
+		assert.strictEqual(inputLabel("continue"), undefined);
+		assert.strictEqual(inputLabel("/context-revalidation check auth"), "check auth");
+		assert.strictEqual(
+			inputLabel("/skill:principle-fix-root-causes Sometimes when I have multiple pi instances"),
+			"Sometimes when I have multiple…",
+		);
+		assert.strictEqual(inputLabel("/review"), "review");
+		assert.strictEqual(inputLabel("/Users/pun/app"), "/Users/pun/app");
+		assert.strictEqual(inputLabel("Sometimes when I have multiple pi instances"), "Sometimes when I have multiple…");
+
+		const longEmoji = `${"a".repeat(31)}😀 and more`;
+		const label = inputLabel(longEmoji);
+		assert.strictEqual(label, `${"a".repeat(31)}😀…`);
+		assert.strictEqual(label?.isWellFormed(), true);
+
+		const longInput = `${"b".repeat(10_000)} after`;
+		assert.strictEqual(inputLabel(longInput), `${"b".repeat(32)}…`);
+
+		const injection = inputLabel("fix\x1b]0;evil\x07 title");
+		assert.strictEqual(injection, "fix ]0;evil title");
+		assert.ok(!/[\x00-\x1f\x7f-\x9f]/.test(injection ?? ""));
+
+		const loneSurrogate = inputLabel(`${"a".repeat(31)}\ud800`);
+		assert.strictEqual(loneSurrogate?.isWellFormed(), true);
 	});
 
 	it("stays silent when a new agent run resumes before the settle debounce fires", async () => {
@@ -380,6 +520,7 @@ void describe("pi-nudge", () => {
 		const harness = createHarness();
 
 		harness.run("session_start");
+		harness.submitInput("fix notifications");
 		harness.input("\x1b[O");
 		harness.run("ui_prompt_start", {
 			type: "ui_prompt_start",
@@ -399,8 +540,12 @@ void describe("pi-nudge", () => {
 		await harness.flushTimers();
 
 		assert.deepStrictEqual(harness.notifications, [
-			{ title: "Pi needs you", message: "pi-nudge is waiting for a response." },
+			{ title: "Pi needs you", message: "fix notifications · pi-nudge is waiting for a response." },
 		]);
+		assert.strictEqual(harness.status(), "fix notifications");
+
+		harness.run("ui_prompt_end", { type: "ui_prompt_end", reason: "ui_prompt", kind: "confirm" });
+		assert.strictEqual(harness.status(), undefined);
 	});
 
 	it("does not notify when the session ends during the focus probe", async () => {

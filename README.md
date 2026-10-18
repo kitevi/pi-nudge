@@ -17,6 +17,11 @@ input without watching the terminal.
   sends one notification. The same delay applies while a blocking prompt stays open
   (`ui_prompt_start`). A run resuming within the delay (auto-retry, compaction retry, queued
   follow-up), or the prompt closing, cancels the pending nudge.
+- Notifications name the current task from the latest meaningful raw input. A leading slash command is
+  reduced to its arguments, so `/review concurrency` labels the tab `concurrency` rather than
+  showing the expanded template. Labels are capped at 32 graphemes, lead the notification body,
+  and also appear in pi's footer until you focus that tab, start the next run, or answer the
+  prompt. Set `PI_NUDGE_LABEL=off` to keep request text out of notifications and the footer.
 - The macOS fallback asks System Events which application is frontmost. The first probe can
   prompt for automation access.
 - Delivery: `osascript` on macOS — node-notifier's bundled terminal-notifier is
