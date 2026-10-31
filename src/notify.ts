@@ -1,13 +1,14 @@
 /**
  * Notification delivery for pi-nudge.
  *
- * macOS goes through the system osascript binary instead of node-notifier:
- * node-notifier's vendored terminal-notifier.app is Intel-only, so it runs
- * under Rosetta — which macOS 28 removes. osascript is native on every macOS
- * install. Everywhere else delegates to node-notifier, so delivery stays
- * native per platform — toasts on Windows, notify-send on Linux, Growl as a
- * fallback — with no dependency on terminal-emulator protocols (no OSC
- * 777/99 escape sequences).
+ * macOS goes through the system osascript binary instead of node-notifier.
+ * node-notifier's bundled terminal-notifier 3 is universal, but it needs its
+ * own notification permission: on macOS 27 its first request was refused
+ * without a prompt, and killing it while the prompt is up leaves it denied
+ * until changed in System Settings. Everywhere else delegates to node-notifier,
+ * so delivery stays native per platform — toasts on Windows, notify-send on
+ * Linux, Growl as a fallback — with no dependency on terminal-emulator
+ * protocols (no OSC 777/99 escape sequences).
  */
 import { execFile } from "node:child_process";
 import notifier from "node-notifier";

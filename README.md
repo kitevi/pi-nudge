@@ -24,8 +24,8 @@ input without watching the terminal.
   prompt. Set `PI_NUDGE_LABEL=off` to keep request text out of notifications and the footer.
 - The macOS fallback asks System Events which application is frontmost. The first probe can
   prompt for automation access.
-- Delivery: `osascript` on macOS — node-notifier's bundled terminal-notifier is
-  Intel-only and needs Rosetta, which macOS 28 removes — and
+- Delivery: `osascript` on macOS — node-notifier's bundled terminal-notifier needs its own
+  permission, and a refused or interrupted request silently stops notifications — and
   [node-notifier](https://github.com/mikaelbr/node-notifier) elsewhere: toasts on Windows,
   `notify-send` on Linux, Growl as a fallback. Notifications use the default sound.
   No terminal-emulator dependency — no OSC escape sequences.

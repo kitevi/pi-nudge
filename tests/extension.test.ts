@@ -609,8 +609,8 @@ void describe("pi-nudge", () => {
 	});
 
 	it("delivers macOS notifications through the native osascript binary", () => {
-		// node-notifier's vendored terminal-notifier.app is Intel-only; on macOS
-		// delivery must go through osascript (native on every install) instead.
+		// node-notifier's bundled terminal-notifier needs its own permission and can
+		// fail without prompting; on macOS delivery goes through osascript instead.
 		const runs: Array<{ command: string; args: string[] }> = [];
 		const send = createNotificationSender({
 			platform: "darwin",
