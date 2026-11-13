@@ -2,10 +2,11 @@
  * pi-nudge — native desktop notifications for the pi coding agent.
  *
  * Nudges you when the agent settles, or a blocking prompt stays open, while
- * your terminal is unfocused. Delivery lives in notify.ts (osascript on macOS,
- * node-notifier elsewhere). Focus reports are read from stdin because pi's
- * fullscreen UI consumes CSI 1004 before extension listeners run; onTerminalInput
- * still strips reports so regular mode does not insert them into the editor.
+ * your terminal is unfocused. Delivery lives in notify.ts (an escape sequence
+ * where the terminal posts notifications itself, the operating system
+ * elsewhere). Focus reports are read from stdin because pi's fullscreen UI
+ * consumes CSI 1004 before extension listeners run; onTerminalInput still
+ * strips reports so regular mode does not insert them into the editor.
  *
  * The nudge is debounced: a resumed run, or the prompt closing, within the
  * delay cancels it. Notifications name the current task from the raw input and
@@ -123,7 +124,12 @@ const projectLabel = (cwd: string) => basename(cwd) || "pi";
 
 export const createPiNudgeExtension = (dependencies: PiNudgeDependencies) => {
 	const notify =
-		dependencies.sendNotification ?? createNotificationSender({ platform: dependencies.platform });
+		dependencies.sendNotification ??
+		createNotificationSender({
+			platform: dependencies.platform,
+			env: dependencies.env,
+			writeTerminal: dependencies.writeTerminal,
+		});
 	const settleDelayMs = dependencies.settleNotifyDelayMs ?? DEFAULT_SETTLE_NOTIFY_DELAY_MS;
 	const setTimer = dependencies.setTimer ?? ((fn: () => void, delayMs: number) => setTimeout(fn, delayMs));
 	const clearTimer =

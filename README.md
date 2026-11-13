@@ -24,18 +24,60 @@ input without watching the terminal.
   prompt. Set `PI_NUDGE_LABEL=off` to keep request text out of notifications and the footer.
 - The macOS fallback asks System Events which application is frontmost. The first probe can
   prompt for automation access.
-- Delivery: `osascript` on macOS — node-notifier's bundled terminal-notifier needs its own
-  permission, and a refused or interrupted request silently stops notifications — and
-  [node-notifier](https://github.com/mikaelbr/node-notifier) elsewhere: toasts on Windows,
-  `notify-send` on Linux, Growl as a fallback. Notifications use the default sound.
-  No terminal-emulator dependency — no OSC escape sequences.
+- Delivery: the terminal posts the notification where it can (Kitty, iTerm2, Ghostty, WezTerm)
+  and the operating system does everywhere else. See [Delivery](#delivery).
 
 ## Install
 
     pi install git:github.com/kitevi/pi-nudge
 
-On macOS the first notification triggers the notification permission prompt, and notifications are
-labeled with the system osascript sender (Script Editor).
+## Delivery
+
+In Kitty, iTerm2, Ghostty and WezTerm pi-nudge writes an escape sequence and the terminal posts
+the notification. That needs no helper program, uses the terminal's own notification permission,
+and reaches your local terminal when pi runs over SSH. In Kitty and Ghostty, clicking the
+notification brings that window back.
+
+| Terminal | Sequence | Recognised by                                              |
+| -------- | -------- | ---------------------------------------------------------- |
+| Kitty    | OSC 99   | `TERM=xterm-kitty`                                         |
+| Ghostty  | OSC 777  | `TERM=xterm-ghostty` or `TERM_PROGRAM=ghostty`             |
+| WezTerm  | OSC 777  | `TERM_PROGRAM=WezTerm`                                     |
+| iTerm2   | OSC 9    | `TERM_PROGRAM=iTerm.app`, or `LC_TERMINAL=iTerm2` over SSH |
+
+iTerm2 only shows these once Settings → Profiles → Terminal → "Notification Center alerts" is on.
+Ghostty shows at most one notification a second, so two pi sessions that settle in the same
+second produce one.
+
+Everywhere else the operating system delivers the notification, with the default sound:
+`osascript` on macOS and [node-notifier](https://github.com/mikaelbr/node-notifier) elsewhere
+(`notify-send` on Linux, toasts on Windows, Growl as a fallback). That covers other terminals,
+Windows, and anything between pi and the terminal that would swallow the sequence: tmux, Zellij,
+screen, and the built-in terminals of Neovim, Emacs and JetBrains IDEs.
+
+Set `PI_NUDGE_DELIVERY` to `system`, `osc9`, `osc99` or `osc777` to choose yourself: `system`,
+for example, when your terminal's notifications are turned off.
+
+### tmux
+
+tmux drops these sequences unless `allow-passthrough` is on, and with `on` it still drops them
+from panes outside the visible window, so inside tmux pi-nudge stays with the operating system.
+To get terminal notifications through tmux, for example over SSH, set both of these and pi-nudge
+wraps the sequence in tmux's passthrough:
+
+    set -g allow-passthrough all        # in ~/.tmux.conf
+    export PI_NUDGE_DELIVERY=osc777     # the sequence your outer terminal takes
+
+### macOS through osascript
+
+These notifications are sent as Script Editor: they carry its name and icon and need its
+notification permission. macOS may not ask for that permission when `osascript` runs from a
+terminal; the command succeeds and nothing appears. If that happens, open Script Editor, run
+`display notification "test"` once and allow notifications when asked, or turn Script Editor on
+under System Settings → Notifications.
+
+node-notifier's bundled terminal-notifier is not used on macOS: it needs its own permission, and
+a refused or interrupted request silently stops notifications.
 
 ## Develop
 
@@ -44,3 +86,9 @@ labeled with the system osascript sender (Script Editor).
     npm test
 
 Set `PI_NUDGE_DEBUG=1` to log focus-probe and notification delivery failures to stderr.
+
+### To try on macOS
+
+The System Events probe behind the macOS focus fallback is what raises the automation prompt.
+`lsappinfo front` may answer the same question without one. It is untested: see the
+`TODO(macOS)` in `src/focus.ts`.

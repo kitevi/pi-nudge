@@ -28,7 +28,7 @@
 		]
 	},
 	"dependencies": {
-		"node-notifier": "latest"
+		"node-notifier": "^12.1.0"
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": "*"
@@ -36,7 +36,6 @@
 	"devDependencies": {
 		"@earendil-works/pi-coding-agent": "latest",
 		"@types/node": "latest",
-		"@types/node-notifier": "^8.0.5",
 		"jiti": "latest",
 		"typescript": "latest",
 		"vitest": "latest"

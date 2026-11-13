@@ -30,7 +30,7 @@ const waiting = (message = "pi-nudge is ready for input.") => ({
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-const createHarness = (overrides: Partial<PiNudgeDependencies> = {}) => {
+const createHarness = (overrides: Partial<PiNudgeDependencies> = {}, { realSender = false } = {}) => {
 	const lifecycle = new Map<string, ExtensionHandler>();
 	const writes: string[] = [];
 	const notifications: Array<{ title: string; message: string }> = [];
@@ -70,7 +70,10 @@ const createHarness = (overrides: Partial<PiNudgeDependencies> = {}) => {
 		pid: 30,
 		writeTerminal: (data) => writes.push(data),
 		readCommand: async () => undefined,
-		sendNotification: (title, message) => notifications.push({ title, message }),
+		// realSender leaves delivery to notify.ts, so what it writes lands in `writes`.
+		...(realSender
+			? {}
+			: { sendNotification: (title: string, message: string) => notifications.push({ title, message }) }),
 		setTimer: (fn: () => void, delayMs: number) => {
 			const timer: ScheduledTimer = { fn, delayMs, cancelled: false };
 			scheduled.push(timer);
@@ -606,6 +609,25 @@ void describe("pi-nudge", () => {
 		await tick();
 
 		assert.deepStrictEqual(stale.notifications, []);
+	});
+
+	it("posts the nudge through a terminal that shows notifications itself", async () => {
+		notifyMock.mockClear();
+		const harness = createHarness(
+			{ env: { TERM: "xterm-ghostty", TERM_PROGRAM: "ghostty" } },
+			{ realSender: true },
+		);
+
+		harness.run("session_start");
+		harness.input("\x1b[O");
+		harness.writes.length = 0;
+		harness.run("agent_settled");
+		await harness.flushTimers();
+
+		assert.deepStrictEqual(harness.writes, [
+			"\x1b]777;notify;Pi is waiting for you;pi-nudge is ready for input.\x1b\\",
+		]);
+		assert.strictEqual(notifyMock.mock.calls.length, 0);
 	});
 
 	it("delivers macOS notifications through the native osascript binary", () => {

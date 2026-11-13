@@ -183,7 +183,7 @@ const namesForTerminal = (termProgram: string | undefined) => {
 	return MAC_TERMINAL_NAMES[termProgram.toLowerCase()];
 };
 
-const inMultiplexer = (env: NodeJS.ProcessEnv) =>
+export const inMultiplexer = (env: NodeJS.ProcessEnv) =>
 	env["TMUX"] !== undefined || env["ZELLIJ"] !== undefined || env["STY"] !== undefined;
 
 const parseProcessParents = (output: string) => {
@@ -219,6 +219,12 @@ const pidIsThisTerminal = async (
 	return processIncludes(dependencies.pid ?? process.pid, targetPid, parents);
 };
 
+// TODO(macOS): try `lsappinfo` in place of this System Events script. It asks
+// LaunchServices instead of sending Apple Events, so it should not raise the
+// automation prompt: `lsappinfo front` prints the frontmost application's ASN,
+// and `lsappinfo info -only pid <ASN>` and `-only name <ASN>` its pid and name.
+// Untested: check on a Mac that it asks for no permission, and that it still
+// answers inside tmux and with a fullscreen application in front.
 const FRONTMOST_APPLICATION_SCRIPT = [
 	'tell application "System Events"',
 	"set frontProcess to first application process whose frontmost is true",
