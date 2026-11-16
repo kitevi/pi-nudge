@@ -22,8 +22,8 @@ input without watching the terminal.
   showing the expanded template. Labels are capped at 32 graphemes, lead the notification body,
   and also appear in pi's footer until you focus that tab, start the next run, or answer the
   prompt. Set `PI_NUDGE_LABEL=off` to keep request text out of notifications and the footer.
-- The macOS fallback asks System Events which application is frontmost. The first probe can
-  prompt for automation access.
+- The macOS fallback asks LaunchServices which application is frontmost, through `lsappinfo`.
+  That sends no Apple Events, so it needs no automation permission.
 - Delivery: the terminal posts the notification where it can (Kitty, iTerm2, Ghostty, WezTerm)
   and the operating system does everywhere else. See [Delivery](#delivery).
 
@@ -86,9 +86,3 @@ a refused or interrupted request silently stops notifications.
     npm test
 
 Set `PI_NUDGE_DEBUG=1` to log focus-probe and notification delivery failures to stderr.
-
-### To try on macOS
-
-The System Events probe behind the macOS focus fallback is what raises the automation prompt.
-`lsappinfo front` may answer the same question without one. It is untested: see the
-`TODO(macOS)` in `src/focus.ts`.

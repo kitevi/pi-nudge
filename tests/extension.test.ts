@@ -11,6 +11,7 @@ import {
 	type PiNudgeDependencies,
 } from "../src/extension.ts";
 import { createNotificationSender, sanitizeNotificationField } from "../src/notify.ts";
+import { FRONT_ASN, readMacCommand } from "./lsappinfo.ts";
 
 const { notifyMock } = vi.hoisted(() => ({ notifyMock: vi.fn() }));
 
@@ -379,14 +380,13 @@ void describe("pi-nudge", () => {
 
 	it("uses the frontmost macOS application as a focus fallback when no terminal report arrived", async () => {
 		const reads: Array<{ command: string; args: string[] }> = [];
+		const read = readMacCommand({ name: "Finder", pid: 99 }, "30 1\n");
 		const harness = createHarness({
 			platform: "darwin",
 			env: { TERM_PROGRAM: "ghostty" },
 			readCommand: async (command, args) => {
 				reads.push({ command, args });
-				if (command === "osascript") return "99\nFinder\n";
-				if (command === "ps") return "30 1\n";
-				return undefined;
+				return read(command, args);
 			},
 		});
 
@@ -394,8 +394,10 @@ void describe("pi-nudge", () => {
 		harness.run("agent_settled");
 		await harness.flushTimers();
 
-		assert.strictEqual(reads[0]?.command, "osascript");
-		assert.match(reads[0]?.args[1] ?? "", /unix id/);
+		assert.deepStrictEqual(reads.slice(0, 2), [
+			{ command: "lsappinfo", args: ["front"] },
+			{ command: "lsappinfo", args: ["info", FRONT_ASN] },
+		]);
 		assert.deepStrictEqual(harness.notifications, [waiting()]);
 	});
 
@@ -403,11 +405,7 @@ void describe("pi-nudge", () => {
 		const harness = createHarness({
 			platform: "darwin",
 			env: { TERM_PROGRAM: "ghostty" },
-			readCommand: async (command) => {
-				if (command === "osascript") return "99\nGhostty\n";
-				if (command === "ps") return "30 1\n";
-				return undefined;
-			},
+			readCommand: readMacCommand({ name: "Ghostty", pid: 99 }, "30 1\n"),
 		});
 
 		harness.run("session_start");
@@ -421,11 +419,7 @@ void describe("pi-nudge", () => {
 		const harness = createHarness({
 			platform: "darwin",
 			env: { TERM_PROGRAM: "vscode" },
-			readCommand: async (command) => {
-				if (command === "osascript") return "10\nCursor\n";
-				if (command === "ps") return "10 1\n20 10\n30 20\n";
-				return undefined;
-			},
+			readCommand: readMacCommand({ name: "Cursor", pid: 10 }, "10 1\n20 10\n30 20\n"),
 		});
 
 		harness.run("session_start");
@@ -439,11 +433,7 @@ void describe("pi-nudge", () => {
 		const harness = createHarness({
 			platform: "darwin",
 			env: { TERM_PROGRAM: "ghostty", TMUX: "/tmp/tmux" },
-			readCommand: async (command) => {
-				if (command === "osascript") return "99\nSafari\n";
-				if (command === "ps") return "30 1\n";
-				return undefined;
-			},
+			readCommand: readMacCommand({ name: "Safari", pid: 99 }, "30 1\n"),
 		});
 
 		harness.run("session_start");

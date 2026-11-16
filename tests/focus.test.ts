@@ -1,5 +1,6 @@
 import { assert, describe, it } from "vitest";
 import { consumeFocusReports, createFocusReportReader, probeFallbackFocus } from "../src/focus.ts";
+import { FRONT_ASN, readMacCommand } from "./lsappinfo.ts";
 
 const ancestorPs = "10 1\n20 10\n30 20\n";
 
@@ -119,11 +120,7 @@ void describe("focus probe", () => {
 				platform: "darwin",
 				pid: 30,
 				env: { TERM_PROGRAM: "alacritty" },
-				readCommand: async (command) => {
-					if (command === "osascript") return "10\nNotATerminal\n";
-					if (command === "ps") return ancestorPs;
-					return undefined;
-				},
+				readCommand: readMacCommand({ name: "NotATerminal", pid: 10 }, ancestorPs),
 			}),
 			"focused",
 		);
@@ -135,11 +132,7 @@ void describe("focus probe", () => {
 				platform: "darwin",
 				pid: 30,
 				env: { TERM_PROGRAM: "vscode" },
-				readCommand: async (command) => {
-					if (command === "osascript") return "10\nCursor\n";
-					if (command === "ps") return ps;
-					return undefined;
-				},
+				readCommand: readMacCommand({ name: "Cursor", pid: 10 }, ps),
 			});
 
 		assert.strictEqual(await cursor(ancestorPs), "focused");
@@ -152,14 +145,57 @@ void describe("focus probe", () => {
 				platform: "darwin",
 				pid: 30,
 				env,
-				readCommand: async (command) => {
-					if (command === "osascript") return "99\nSafari\n";
-					if (command === "ps") return "30 1\n";
-					return undefined;
-				},
+				readCommand: readMacCommand({ name: "Safari", pid: 99 }, "30 1\n"),
 			});
 
 		assert.strictEqual(await probe({ TERM_PROGRAM: "ghostty" }), "unfocused");
 		assert.strictEqual(await probe({ TERM_PROGRAM: "ghostty", TMUX: "/tmp/tmux" }), "unknown");
+	});
+
+	it("passes only an ASN from lsappinfo front on to lsappinfo info", async () => {
+		const calls: string[][] = [];
+		const read = readMacCommand({ name: "Safari", pid: 99 }, "30 1\n");
+		const unfocused = await probeFallbackFocus({
+			platform: "darwin",
+			pid: 30,
+			env: { TERM_PROGRAM: "ghostty" },
+			readCommand: async (command, args) => {
+				calls.push([command, ...args]);
+				return read(command, args);
+			},
+		});
+
+		assert.strictEqual(unfocused, "unfocused");
+		assert.deepStrictEqual(calls.slice(0, 2), [
+			["lsappinfo", "front"],
+			["lsappinfo", "info", FRONT_ASN],
+		]);
+
+		const rejected: string[][] = [];
+		const unknown = await probeFallbackFocus({
+			platform: "darwin",
+			pid: 30,
+			env: { TERM_PROGRAM: "ghostty" },
+			readCommand: async (command, args) => {
+				rejected.push([command, ...args]);
+				if (args[0] === "front") return "[ NULL ] \n";
+				return "should-not-be-called";
+			},
+		});
+
+		assert.strictEqual(unknown, "unknown");
+		assert.deepStrictEqual(rejected, [["lsappinfo", "front"]]);
+	});
+
+	it("matches a display name with spaces against the terminal map", async () => {
+		assert.strictEqual(
+			await probeFallbackFocus({
+				platform: "darwin",
+				pid: 30,
+				env: { TERM_PROGRAM: "vscode" },
+				readCommand: readMacCommand({ name: "Visual Studio Code", pid: 99 }, "30 1\n"),
+			}),
+			"focused",
+		);
 	});
 });

@@ -219,26 +219,35 @@ const pidIsThisTerminal = async (
 	return processIncludes(dependencies.pid ?? process.pid, targetPid, parents);
 };
 
-// TODO(macOS): try `lsappinfo` in place of this System Events script. It asks
-// LaunchServices instead of sending Apple Events, so it should not raise the
-// automation prompt: `lsappinfo front` prints the frontmost application's ASN,
-// and `lsappinfo info -only pid <ASN>` and `-only name <ASN>` its pid and name.
-// Untested: check on a Mac that it asks for no permission, and that it still
-// answers inside tmux and with a fullscreen application in front.
-const FRONTMOST_APPLICATION_SCRIPT = [
-	'tell application "System Events"',
-	"set frontProcess to first application process whose frontmost is true",
-	'(unix id of frontProcess as text) & linefeed & (name of frontProcess)',
-	"end tell",
-].join("\n");
+/** `lsappinfo front` prints the frontmost application's ASN, e.g. `ASN:0x0-0x41041:`. */
+const ASN_PATTERN = /^ASN:0x[0-9a-f]+-0x[0-9a-f]+:$/i;
+
+/**
+ * Asks LaunchServices for the frontmost application's pid and display name.
+ * lsappinfo sends no Apple Events, so unlike a System Events script it needs no
+ * automation permission. It reads the full `lsappinfo info` record, which opens
+ * with the quoted display name and has a `pid = ` line: `-only` output differs
+ * between macOS versions, and macOS 27 prints the whole record with the other
+ * fields blank.
+ */
+const readFrontApplication = async (dependencies: FocusDependencies) => {
+	const asn = (await dependencies.readCommand?.("lsappinfo", ["front"]))?.trim();
+	if (!asn || !ASN_PATTERN.test(asn)) return undefined;
+
+	const info = await dependencies.readCommand?.("lsappinfo", ["info", asn]);
+	if (!info) return undefined;
+	return {
+		pid: Number(info.match(/^\s*pid = (\d+)/m)?.[1]),
+		name: info.match(/^\s*"(.*)" ASN:/)?.[1] ?? "",
+	};
+};
 
 const probeMacFocus = async (dependencies: FocusDependencies): Promise<FocusState> => {
-	const output = await dependencies.readCommand?.("osascript", ["-e", FRONTMOST_APPLICATION_SCRIPT]);
-	if (!output?.trim()) return "unknown";
+	const front = await readFrontApplication(dependencies);
+	if (!front) return "unknown";
 
-	const lines = output.split(/\r?\n/);
-	const frontPid = Number(lines[0]?.trim());
-	const frontName = lines.slice(1).join("\n").trim().toLowerCase();
+	const frontPid = front.pid;
+	const frontName = front.name.toLowerCase();
 	const pidOk = Number.isInteger(frontPid) && frontPid > 0;
 	const names = namesForTerminal(dependencies.env["TERM_PROGRAM"]);
 	const nameMatches = frontName.length > 0 && names?.some((name) => name === frontName) === true;
